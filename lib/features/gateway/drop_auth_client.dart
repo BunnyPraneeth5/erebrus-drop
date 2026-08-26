@@ -106,14 +106,16 @@ class DropAuthClient {
     return DropOrg.fromJson(map);
   }
 
-  /// `POST /api/v2/referrals/redeem` — redeem an invite code for the signed-in
-  /// user so the gateway credits the inviter's XP. Returns the gateway response
-  /// (may carry an `xp`/`message` field). Throws [GatewayException] on failure
-  /// (e.g. invalid/expired/already-redeemed code).
+  /// `POST /api/v2/referrals/redeem` — binds an invite code to the signed-in
+  /// user (one referrer per account, ever). On success returns the caller's
+  /// referral summary — `{code, referred_count, referral_bound, referred_by,
+  /// recent}` — or `{bound: true}` when the summary can't be reloaded. There is
+  /// no `message`/`xp` field: XP is awarded server-side to both parties only
+  /// once the referee qualifies (active org membership), and lifetime XP is read
+  /// separately from `GET /api/v2/rank/me` (`xp_earned`).
   ///
-  /// NOTE: confirm the exact path and body field with the gateway team — the
-  /// referral redeem endpoint is the one referral surface not yet exercised by
-  /// another client.
+  /// Throws [GatewayException] on failure: 404 `invite code not found`, 409 when
+  /// a code is already applied, or 400 for a self-redeem / missing code.
   Future<Map<String, dynamic>> redeemReferral({
     required String bearerToken,
     required String code,

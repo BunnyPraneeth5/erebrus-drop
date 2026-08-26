@@ -121,21 +121,30 @@ void main() {
       return service;
     }
 
-    test('forwards a trimmed code and returns the gateway message', () async {
+    test('forwards a trimmed code and confirms the binding', () async {
+      // Real gateway success shape: the referral summary, no message/xp field.
       final client = _RedeemAuthClient(
-        response: {'message': 'You credited Alice 50 XP'},
+        response: {
+          'code': 'ABC12345',
+          'referred_count': 0,
+          'referral_bound': true,
+          'referred_by': 'wallet…addr',
+          'recent': <dynamic>[],
+        },
       );
       final service = await signedInService(client);
 
       final message = await service.redeemReferralCode('  INV123  ');
 
-      expect(message, 'You credited Alice 50 XP');
+      expect(message, 'Invite code applied');
       expect(client.lastCode, 'INV123');
       expect(client.lastBearer, 'stored-token');
     });
 
-    test('falls back to a default message when none is returned', () async {
-      final service = await signedInService(_RedeemAuthClient(response: {}));
+    test('accepts the {bound: true} fallback response', () async {
+      final service = await signedInService(
+        _RedeemAuthClient(response: {'bound': true}),
+      );
       expect(await service.redeemReferralCode('INV123'), 'Invite code applied');
     });
 
@@ -151,14 +160,24 @@ void main() {
     });
 
     test('surfaces a gateway rejection as an AuthException', () async {
+      // Gateway errors are flat `{"error": "..."}`; GatewayHttp lifts the string.
       final service = await signedInService(
-        _RedeemAuthClient(error: GatewayException('Invalid invite code')),
+        _RedeemAuthClient(
+          error: GatewayException(
+            'invite code not found',
+            statusCode: 404,
+          ),
+        ),
       );
 
       await expectLater(
         service.redeemReferralCode('BADCODE'),
         throwsA(
-          isA<AuthException>().having((e) => e.message, 'message', 'Invalid invite code'),
+          isA<AuthException>().having(
+            (e) => e.message,
+            'message',
+            'invite code not found',
+          ),
         ),
       );
     });

@@ -589,9 +589,10 @@ class DropAuthService {
     return org;
   }
 
-  /// Redeems an invite code for the signed-in user so the gateway awards the
-  /// inviter XP. Returns a short success message; throws [AuthException] on an
-  /// empty code, an unauthenticated caller, or a gateway rejection.
+  /// Binds an invite code to the signed-in user so the gateway can credit the
+  /// referral (XP is awarded to both parties later, once the referee qualifies).
+  /// Returns a short success message; throws [AuthException] on an empty code,
+  /// an unauthenticated caller, or a gateway rejection.
   Future<String> redeemReferralCode(String code) async {
     if (!isSignedIn || _bearerToken == null || _bearerToken!.isEmpty) {
       throw const AuthException('Sign in first');
@@ -605,8 +606,12 @@ class DropAuthService {
         bearerToken: _bearerToken!,
         code: trimmed,
       );
-      final message = (result['message'] ?? '').toString().trim();
-      return message.isEmpty ? 'Invite code applied' : message;
+      // The gateway returns the referral summary (or `{bound: true}`) — there is
+      // no message/xp field, and XP is credited server-side only after the
+      // referee qualifies, so confirm the binding rather than promise points.
+      final applied =
+          result['referral_bound'] == true || result['bound'] == true;
+      return applied ? 'Invite code applied' : 'Invite code received';
     } on GatewayException catch (e) {
       throw AuthException(e.message);
     }

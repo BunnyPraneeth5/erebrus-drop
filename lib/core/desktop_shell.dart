@@ -51,6 +51,11 @@ class DesktopShell with WindowListener, TrayListener {
     if (!isDesktopPlatform) {
       return;
     }
+    if (Platform.isMacOS) {
+      // Keep macOS in accessory-app mode so hiding the window cannot leave a
+      // Dock icon behind. The menu bar item is the app's reopen affordance.
+      await windowManager.setSkipTaskbar(true);
+    }
     await windowManager.hide();
   }
 
@@ -77,10 +82,11 @@ class DesktopShell with WindowListener, TrayListener {
   }
 
   Future<void> _configureWindow() async {
-    const options = WindowOptions(
-      size: Size(880, 820),
-      minimumSize: Size(720, 640),
+    final options = WindowOptions(
+      size: const Size(880, 820),
+      minimumSize: const Size(720, 640),
       center: true,
+      skipTaskbar: Platform.isMacOS,
       title: 'Erebrus Drop',
     );
     windowManager.waitUntilReadyToShow(options, () async {

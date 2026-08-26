@@ -2329,7 +2329,7 @@ class _DropHomeScreenState extends State<DropHomeScreen>
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Redeem a friend\'s code to credit them XP.',
+                      'Redeem a friend\'s code to credit them for the invite.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],

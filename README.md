@@ -35,7 +35,8 @@ or cloud upload.
 ## What's New in 1.0.9+9
 
 - **Burn Mode rooms now auto-expire** — rooms started with Burn Mode enabled shut down automatically at their two-hour deadline (previously the deadline was recorded but never enforced), and the host dashboard shows a live **"Expires in"** countdown. Enforcement also catches rooms whose deadline passed while the app was backgrounded, tearing them down on resume.
-- **Redeem invite codes** — Settings now has an **Invite code** field to redeem a friend's referral code while signed in, crediting them XP for the invite.
+- **Redeem invite codes** — Settings now has an **Invite code** field to redeem a friend's referral code while signed in, so both of you are credited for the invite once you qualify.
+- **True macOS menu-bar mode** — Erebrus Drop no longer occupies the Dock. Closing the window keeps the app running in the menu bar, whose tray icon is the sole way to reopen it; **Quit** remains available from the tray menu.
 - **Corrected Google sign-in** — updated the Google server client ID used to verify Google sign-in tokens.
 
 ### Previously in 1.0.8+8
