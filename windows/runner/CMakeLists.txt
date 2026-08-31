@@ -7,6 +7,7 @@ project(runner LANGUAGES CXX)
 #
 # Any new source files that you add to the application should be added here.
 add_executable(${BINARY_NAME} WIN32
+  "erebrus_drop_channel.cpp"
   "flutter_window.cpp"
   "main.cpp"
   "utils.cpp"
@@ -34,6 +35,9 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
+# COM (CoInitializeEx/CoCreateInstance/CoTaskMemFree) and the shell item and
+# file dialog interfaces used by the "com.erebrus.drop/network" file picker.
+target_link_libraries(${BINARY_NAME} PRIVATE "ole32.lib" "shell32.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.
