@@ -77,7 +77,9 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.bolt_outlined));
     await tester.pump();
-    expect(find.text('Drop files'), findsOneWidget);
+    expect(find.text('Add files'), findsOneWidget);
+    expect(find.text('Send a link'), findsOneWidget);
+    expect(find.text('Share Sheet'), findsNothing);
     expect(tester.takeException(), isNull);
 
     debugDefaultTargetPlatformOverride = null;
@@ -233,5 +235,69 @@ void main() {
     expect(find.text('Drop Code'), findsOneWidget);
     expect(find.text('http://192.168.1.24:8787'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Send a link opens a dialog and adds a URL to the composer', (
+    tester,
+  ) async {
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.getData') {
+          return {'text': 'https://example.com'};
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    await tester.binding.setSurfaceSize(const Size(393, 851));
+    tester.view.devicePixelRatio = 1;
+
+    await tester.pumpWidget(const ErebrusDropApp(skipOnboarding: true));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.bolt_outlined));
+    await tester.pump();
+    expect(find.text('Add files'), findsOneWidget);
+    expect(find.text('Send a link'), findsOneWidget);
+    expect(find.text('Share Sheet'), findsNothing);
+
+    await tester.tap(find.text('Send a link'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+
+    final urlField = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(TextField),
+    );
+    expect(urlField, findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('https://example.com'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.enterText(urlField, 'https://example.org');
+    await tester.pump();
+
+    await tester.tap(find.text('Add to composer'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.text('https://example.org'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    tester.view.resetDevicePixelRatio();
+    await tester.binding.setSurfaceSize(null);
   });
 }

@@ -1544,16 +1544,13 @@ class _DropHomeScreenState extends State<DropHomeScreen>
       ),
     );
     final destination = _smartDestinationCard();
-    const features = _FeatureGrid(
-      items: [
-        ('Share Sheet', Icons.ios_share_rounded, 'From any app'),
-        ('Drop files', Icons.file_download_outlined, 'Desktop'),
-        ('Links', Icons.link_rounded, 'Send as text'),
-      ],
+    final actions = _SmartSendActions(
+      onAddFiles: () => unawaited(_pickAndAddFiles()),
+      onSendLink: () => unawaited(_showAddLinkDialog()),
     );
     final contextPanel = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [destination, const SizedBox(height: 12), features],
+      children: [destination, const SizedBox(height: 12), actions],
     );
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1565,7 +1562,7 @@ class _DropHomeScreenState extends State<DropHomeScreen>
               const SizedBox(height: 12),
               composer,
               const SizedBox(height: 12),
-              features,
+              actions,
             ],
           );
         }
@@ -1738,7 +1735,7 @@ class _DropHomeScreenState extends State<DropHomeScreen>
           ),
         if (_gatewayUploadedCid?.isNotEmpty == true) const SizedBox(height: 12),
         PrimaryButton(
-          label: _gatewayUploading ? 'Uploading…' : 'Choose file & upload',
+          label: _gatewayUploading ? 'Uploading…' : 'Add files',
           icon: Icons.cloud_upload_rounded,
           busy: _gatewayUploading,
           onPressed: selected != null && !_gatewayUploading
@@ -4679,6 +4676,108 @@ class _DropHomeScreenState extends State<DropHomeScreen>
     _smartText.text = data.text!;
   }
 
+  Future<void> _pickAndAddFiles() async {
+    final picked = await _nativeFilePickerService.pickFilesForUpload();
+    final paths = picked
+        .map((file) => file.path)
+        .where((path) => path.isNotEmpty)
+        .toList();
+    if (paths.isEmpty) return;
+
+    if (_smartSendScopeIndex == 1) {
+      await _uploadDroppedFilesToGateway(paths);
+    } else {
+      await _handleSharedPayload(SharedPayload(filePaths: paths));
+    }
+  }
+
+  String? _extractUrl(String value) {
+    final match = RegExp(r'https?://[^\s]+').firstMatch(value.trim());
+    if (match == null) return null;
+    final url = match.group(0);
+    if (url == null) return null;
+    final uri = Uri.tryParse(url);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      return null;
+    }
+    return url;
+  }
+
+  Future<void> _showAddLinkDialog() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted) return;
+
+    final clipboardUrl = _extractUrl(data?.text ?? '');
+    final controller = TextEditingController(text: clipboardUrl ?? '');
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final hasClipboardUrl = _extractUrl(data?.text ?? '') != null;
+          return AlertDialog(
+            backgroundColor: DropTheme.black,
+            title: const Text('Send a link'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'https://...',
+                labelText: 'URL',
+              ),
+              onChanged: (_) => setDialogState(() {}),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: hasClipboardUrl
+                    ? () {
+                        final pasted = _extractUrl(data?.text ?? '');
+                        if (pasted != null) {
+                          controller.text = pasted;
+                          setDialogState(() {});
+                        }
+                      }
+                    : null,
+                child: const Text('Paste from clipboard'),
+              ),
+              FilledButton(
+                onPressed: controller.text.trim().isNotEmpty
+                    ? () => Navigator.of(ctx).pop(controller.text.trim())
+                    : null,
+                child: const Text('Add to composer'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    controller.dispose();
+    if (result == null || !mounted) return;
+
+    final url = _extractUrl(result);
+    if (url == null) {
+      _snack('Enter a valid http or https URL');
+      return;
+    }
+
+    if (_smartText.text.trim().isEmpty) {
+      _smartTitle.text = 'Link';
+      _smartText.text = url;
+    } else {
+      if (_smartTitle.text.trim().isEmpty) {
+        _smartTitle.text = 'Link';
+      }
+      final current = _smartText.text.trim();
+      _smartText.text = '$current\n$url';
+    }
+    _snack('Link added to composer');
+  }
+
   Future<void> _handleSharedPayload(SharedPayload payload) async {
     if (payload.isEmpty || !mounted) return;
     if (_loadingHostFolderSelection) {
@@ -5961,11 +6060,14 @@ class _InfoCard extends StatelessWidget {
   }
 }
 
-class _FeatureGrid extends StatelessWidget {
-  const _FeatureGrid({required this.items});
+class _SmartSendActions extends StatelessWidget {
+  const _SmartSendActions({
+    required this.onAddFiles,
+    required this.onSendLink,
+  });
 
-  /// (title, icon, sub) — all features render a success "Ready" caption.
-  final List<(String, IconData, String)> items;
+  final VoidCallback onAddFiles;
+  final VoidCallback onSendLink;
 
   @override
   Widget build(BuildContext context) {
@@ -5973,60 +6075,79 @@ class _FeatureGrid extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var i = 0; i < items.length; i++) ...[
-            if (i > 0) const SizedBox(width: 10),
-            Expanded(child: _featureCard(context, items[i])),
-          ],
+          Expanded(
+            child: _SmartSendActionCard(
+              icon: Icons.file_upload_outlined,
+              title: 'Add files',
+              subtitle: isDesktopPlatform
+                  ? 'Drop files here or click to browse'
+                  : 'Tap to choose files',
+              onTap: onAddFiles,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _SmartSendActionCard(
+              icon: Icons.add_link_rounded,
+              title: 'Send a link',
+              subtitle: 'Tap to paste a URL into the composer',
+              onTap: onSendLink,
+            ),
+          ),
         ],
       ),
     );
   }
+}
 
-  Widget _featureCard(BuildContext context, (String, IconData, String) item) {
+class _SmartSendActionCard extends StatelessWidget {
+  const _SmartSendActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     return DropCard(
+      onTap: onTap,
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(item.$2, color: DropTheme.orange, size: 22),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: DropTheme.orange, size: 22),
+              const Spacer(),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: DropTheme.faint,
+                size: 18,
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           Text(
-            item.$1,
+            title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const SizedBox(height: 2),
           Text(
-            item.$3,
+            subtitle,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(fontSize: 11),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                  color: DropTheme.success,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Ready',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  color: DropTheme.success,
-                  letterSpacing: 0,
-                ),
-              ),
-            ],
           ),
         ],
       ),
