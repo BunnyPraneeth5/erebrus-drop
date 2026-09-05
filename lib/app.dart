@@ -1900,66 +1900,16 @@ class _DropHomeScreenState extends State<DropHomeScreen>
 
   /// Shows a dialog for entering or loading an encryption key.
   /// Returns the key text, or null if cancelled.
-  Future<String?> _promptEncryptionKey(String filename) async {
-    final ctrl = TextEditingController();
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: DropTheme.black,
-        title: Text('Decryption key for $filename'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter the key used to encrypt this file, or load it from a text/key file.',
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              obscureText: true,
-              decoration: const InputDecoration(
-                hintText: 'Passphrase or base64/hex key',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              ctrl.clear();
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final picked = await _nativeFilePickerService.pickFileForUpload();
-              if (picked == null || picked.path.isEmpty) return;
-              try {
-                final text = await File(picked.path).readAsString();
-                ctrl.text = text.trim();
-              } catch (e) {
-                if (ctx.mounted) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(content: Text('Could not read key file: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('Load key file'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Download'),
-          ),
-        ],
-      ),
+  Future<String?> _promptEncryptionKey(String filename) {
+    return showEncryptionKeyDialog(
+      context,
+      filename: filename,
+      loadKeyFile: () async {
+        final picked = await _nativeFilePickerService.pickFileForUpload();
+        if (picked == null || picked.path.isEmpty) return null;
+        return File(picked.path).readAsString();
+      },
     );
-    final result = ctrl.text.trim();
-    ctrl.dispose();
-    return result.isEmpty ? null : result;
   }
 
   Widget _smartDestinationCard() {
@@ -2468,102 +2418,12 @@ class _DropHomeScreenState extends State<DropHomeScreen>
     );
   }
 
-  Future<void> _showIpfsGatewayPicker() async {
-    const presets = <String>[
-      'https://ipfs.erebrus.io',
-      'https://cloudflare-ipfs.com',
-      'https://gateway.pinata.cloud',
-      'https://ipfs.io',
-    ];
-    final initial = _ipfsGatewayUrl;
-    String? selected = presets.contains(initial) ? initial : null;
-    final customCtrl = TextEditingController(
-      text: presets.contains(initial) ? '' : initial,
+  Future<void> _showIpfsGatewayPicker() {
+    return showIpfsGatewayPickerDialog(
+      context,
+      initialUrl: _ipfsGatewayUrl,
+      onSave: _saveIpfsGatewayUrl,
     );
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final effectiveUrl = selected ?? customCtrl.text.trim();
-          return AlertDialog(
-            backgroundColor: DropTheme.black,
-            title: const Text('IPFS Gateway'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Choose the gateway used to fetch files by CID.'),
-                  const SizedBox(height: 12),
-                  for (final preset in presets)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      leading: Icon(
-                        selected == preset
-                            ? Icons.radio_button_checked_rounded
-                            : Icons.radio_button_unchecked_rounded,
-                        color: selected == preset
-                            ? DropTheme.orange
-                            : DropTheme.faint,
-                      ),
-                      title: Text(preset),
-                      onTap: () {
-                        setDialogState(() {
-                          selected = preset;
-                          customCtrl.clear();
-                        });
-                      },
-                    ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    leading: Icon(
-                      selected == null
-                          ? Icons.radio_button_checked_rounded
-                          : Icons.radio_button_unchecked_rounded,
-                      color: selected == null
-                          ? DropTheme.orange
-                          : DropTheme.faint,
-                    ),
-                    title: const Text('Custom'),
-                    onTap: () => setDialogState(() => selected = null),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 34),
-                    child: TextField(
-                      controller: customCtrl,
-                      enabled: selected == null,
-                      decoration: const InputDecoration(
-                        hintText: 'https://your-gateway.tld',
-                      ),
-                      onChanged: (_) => setDialogState(() {}),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: effectiveUrl.isEmpty
-                    ? null
-                    : () {
-                        Navigator.of(ctx).pop();
-                        unawaited(_saveIpfsGatewayUrl(effectiveUrl));
-                      },
-                child: const Text('Save'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-    customCtrl.dispose();
   }
 
   Widget _settingsFooter() {
@@ -4708,55 +4568,7 @@ class _DropHomeScreenState extends State<DropHomeScreen>
     if (!mounted) return;
 
     final clipboardUrl = _extractUrl(data?.text ?? '');
-    final controller = TextEditingController(text: clipboardUrl ?? '');
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final hasClipboardUrl = _extractUrl(data?.text ?? '') != null;
-          return AlertDialog(
-            backgroundColor: DropTheme.black,
-            title: const Text('Send a link'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'https://...',
-                labelText: 'URL',
-              ),
-              onChanged: (_) => setDialogState(() {}),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: hasClipboardUrl
-                    ? () {
-                        final pasted = _extractUrl(data?.text ?? '');
-                        if (pasted != null) {
-                          controller.text = pasted;
-                          setDialogState(() {});
-                        }
-                      }
-                    : null,
-                child: const Text('Paste from clipboard'),
-              ),
-              FilledButton(
-                onPressed: controller.text.trim().isNotEmpty
-                    ? () => Navigator.of(ctx).pop(controller.text.trim())
-                    : null,
-                child: const Text('Add to composer'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    controller.dispose();
+    final result = await showAddLinkDialog(context, clipboardUrl: clipboardUrl);
     if (result == null || !mounted) return;
 
     final url = _extractUrl(result);
@@ -6060,11 +5872,323 @@ class _InfoCard extends StatelessWidget {
   }
 }
 
-class _SmartSendActions extends StatelessWidget {
-  const _SmartSendActions({
-    required this.onAddFiles,
-    required this.onSendLink,
+Future<String?> showAddLinkDialog(
+  BuildContext context, {
+  required String? clipboardUrl,
+}) {
+  return showDialog<String>(
+    context: context,
+    builder: (_) => _AddLinkDialog(
+      key: const ValueKey('send-link-dialog'),
+      clipboardUrl: clipboardUrl,
+    ),
+  );
+}
+
+class _AddLinkDialog extends StatefulWidget {
+  const _AddLinkDialog({required this.clipboardUrl, super.key});
+
+  final String? clipboardUrl;
+
+  @override
+  State<_AddLinkDialog> createState() => _AddLinkDialogState();
+}
+
+class _AddLinkDialogState extends State<_AddLinkDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.clipboardUrl ?? '');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: DropTheme.black,
+      title: const Text('Send a link'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          hintText: 'https://...',
+          labelText: 'URL',
+        ),
+        onChanged: (_) => setState(() {}),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: widget.clipboardUrl != null
+              ? () {
+                  _controller.text = widget.clipboardUrl!;
+                  setState(() {});
+                }
+              : null,
+          child: const Text('Paste from clipboard'),
+        ),
+        FilledButton(
+          onPressed: _controller.text.trim().isNotEmpty
+              ? () => Navigator.of(context).pop(_controller.text.trim())
+              : null,
+          child: const Text('Add to composer'),
+        ),
+      ],
+    );
+  }
+}
+
+Future<String?> showEncryptionKeyDialog(
+  BuildContext context, {
+  required String filename,
+  required Future<String?> Function() loadKeyFile,
+}) {
+  return showDialog<String>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _EncryptionKeyDialog(
+      key: const ValueKey('encryption-key-dialog'),
+      filename: filename,
+      loadKeyFile: loadKeyFile,
+    ),
+  );
+}
+
+class _EncryptionKeyDialog extends StatefulWidget {
+  const _EncryptionKeyDialog({
+    required this.filename,
+    required this.loadKeyFile,
+    super.key,
   });
+
+  final String filename;
+  final Future<String?> Function() loadKeyFile;
+
+  @override
+  State<_EncryptionKeyDialog> createState() => _EncryptionKeyDialogState();
+}
+
+class _EncryptionKeyDialogState extends State<_EncryptionKeyDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  String? get _result {
+    final text = _controller.text.trim();
+    return text.isEmpty ? null : text;
+  }
+
+  Future<void> _loadKeyFile() async {
+    try {
+      final text = await widget.loadKeyFile();
+      if (!mounted || text == null) return;
+      _controller.text = text.trim();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not read key file: $e')));
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope<String>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) Navigator.of(context).pop(_result);
+      },
+      child: AlertDialog(
+        backgroundColor: DropTheme.black,
+        title: Text('Decryption key for ${widget.filename}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter the key used to encrypt this file, or load it from a text/key file.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              obscureText: true,
+              decoration: const InputDecoration(
+                hintText: 'Passphrase or base64/hex key',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _controller.clear();
+              Navigator.of(context).pop();
+            },
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: _loadKeyFile,
+            child: const Text('Load key file'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(_result),
+            child: const Text('Download'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> showIpfsGatewayPickerDialog(
+  BuildContext context, {
+  required String initialUrl,
+  required Future<void> Function(String) onSave,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (_) => _IpfsGatewayPickerDialog(
+      key: const ValueKey('ipfs-gateway-dialog'),
+      initialUrl: initialUrl,
+      onSave: onSave,
+    ),
+  );
+}
+
+class _IpfsGatewayPickerDialog extends StatefulWidget {
+  const _IpfsGatewayPickerDialog({
+    required this.initialUrl,
+    required this.onSave,
+    super.key,
+  });
+
+  final String initialUrl;
+  final Future<void> Function(String) onSave;
+
+  @override
+  State<_IpfsGatewayPickerDialog> createState() =>
+      _IpfsGatewayPickerDialogState();
+}
+
+class _IpfsGatewayPickerDialogState extends State<_IpfsGatewayPickerDialog> {
+  static const _presets = <String>[
+    'https://ipfs.erebrus.io',
+    'https://cloudflare-ipfs.com',
+    'https://gateway.pinata.cloud',
+    'https://ipfs.io',
+  ];
+
+  late String? _selected;
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialUrl;
+    _selected = _presets.contains(initial) ? initial : null;
+    _controller = TextEditingController(text: _selected == null ? initial : '');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveUrl = _selected ?? _controller.text.trim();
+    return AlertDialog(
+      backgroundColor: DropTheme.black,
+      title: const Text('IPFS Gateway'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Choose the gateway used to fetch files by CID.'),
+            const SizedBox(height: 12),
+            for (final preset in _presets)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                leading: Icon(
+                  _selected == preset
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  color: _selected == preset
+                      ? DropTheme.orange
+                      : DropTheme.faint,
+                ),
+                title: Text(preset),
+                onTap: () {
+                  setState(() {
+                    _selected = preset;
+                    _controller.clear();
+                  });
+                },
+              ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: Icon(
+                _selected == null
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color: _selected == null ? DropTheme.orange : DropTheme.faint,
+              ),
+              title: const Text('Custom'),
+              onTap: () => setState(() => _selected = null),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 34),
+              child: TextField(
+                controller: _controller,
+                enabled: _selected == null,
+                decoration: const InputDecoration(
+                  hintText: 'https://your-gateway.tld',
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: effectiveUrl.isEmpty
+              ? null
+              : () {
+                  Navigator.of(context).pop();
+                  unawaited(widget.onSave(effectiveUrl));
+                },
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class _SmartSendActions extends StatelessWidget {
+  const _SmartSendActions({required this.onAddFiles, required this.onSendLink});
 
   final VoidCallback onAddFiles;
   final VoidCallback onSendLink;
