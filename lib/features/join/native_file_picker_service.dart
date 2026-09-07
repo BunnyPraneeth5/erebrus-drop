@@ -1,4 +1,8 @@
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+import '../../core/platform_capabilities.dart';
 
 class PickedUploadFile {
   const PickedUploadFile({
@@ -31,6 +35,31 @@ class NativeFilePickerService {
   }
 
   Future<List<PickedUploadFile>> pickFilesForUpload() async {
+    if (kIsWeb) return <PickedUploadFile>[];
+
+    // On desktop, file_selector uses the native file dialog on all three
+    // platforms and avoids the need for per-platform method channel code.
+    if (isDesktopPlatform) {
+      final picked = await openFiles(
+        acceptedTypeGroups: const <XTypeGroup>[XTypeGroup()],
+      );
+      return Future.wait(
+        picked.map((file) async {
+          var sizeBytes = 0;
+          try {
+            sizeBytes = await file.length();
+          } catch (_) {
+            // The platform may not always report a length; fall back to 0.
+          }
+          return PickedUploadFile(
+            path: file.path,
+            name: file.name,
+            sizeBytes: sizeBytes,
+          );
+        }),
+      );
+    }
+
     final result = await _channel.invokeMethod<Object?>('pickFilesForUpload');
     if (result is List) {
       return result
