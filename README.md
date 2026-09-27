@@ -1,6 +1,6 @@
 # Erebrus Drop
 
-Current version: `1.0.9+9`
+Current version: `1.0.10+10`
 
 Erebrus Drop is a local-first file and text sharing app for nearby devices. A
 phone can create a temporary Drop Room on the current Wi-Fi network or hotspot,
@@ -23,6 +23,8 @@ or cloud upload.
 - Use optional room passwords and scoped folder access.
 - Save received files to the platform-appropriate user-visible location.
 - Transfer directly on your local network, or explicitly use Erebrus nodes for global reach.
+- Grab videos, audio and photos from public links (YouTube, X, TikTok, Reddit, Bluesky, Vimeo,
+  SoundCloud, direct/HLS links) entirely on-device, finished with a bundled FFmpeg.
 
 ## App Surfaces
 
@@ -30,9 +32,29 @@ or cloud upload.
 - Rooms: discover and join nearby Drop Rooms.
 - Library: view, share, and delete hosted files.
 - Smart Send: send quick text into a room.
-- Settings and About: app details, privacy, terms, and NetSepio ethos.
+- Grab: paste or share a public media link and save it as video, audio (MP3 or original) or
+  muted video straight into the Drop folder or live room.
+- Settings and About (gear on Home; rail entry on desktop): app details, privacy, terms, and
+  NetSepio ethos.
 
-## What's New in 1.0.9+9
+### Grab engine notes
+
+- Extractors live in `lib/features/media_grab/extractors/` and talk to each site's public
+  endpoints; YouTube uses `youtube_explode_dart`. Video+audio merging, MP3 encoding, muting and
+  HLS remuxing run through `ffmpeg_kit_flutter_new_full` (LGPL build, no GPL codecs).
+- DRM-protected streams (e.g. most Vimeo HLS today) are refused rather than decrypted.
+- Reddit may answer anonymous requests with a bot challenge on some networks; set
+  `REDDIT_CLIENT_ID` to use Reddit's official app-only OAuth instead.
+- `integration_test/media_grab_test.dart` exercises the full pipeline on a device (network).
+
+## What's New in 1.0.10+10
+
+- **Grab: save media from public links** — a new Grab tab downloads videos, audio and photos from YouTube, X, TikTok, Reddit, Bluesky, Vimeo, SoundCloud and direct/HLS links, entirely on-device (no NetSepio or third-party backend). Choose Video, Audio (MP3 or original) or Muted, from 360p up to 4K; 1080p and below are always H.264 MP4, and 1440p/4K are labelled WebM. Files land in the Drop folder or the live room, audio is tagged with title and artist, and links shared into the app from supported sites open in Grab automatically. DRM-protected streams are refused, not decrypted.
+- **Settings moved behind a gear** — Settings now opens from the gear on Home (full screen with a back arrow) to make room for Grab in the bottom bar; desktop keeps it in the side rail, reachable with Cmd/Ctrl+, or Cmd/Ctrl+6 (Cmd/Ctrl+5 now opens Grab).
+- **Buttons fit small screens** — buttons, toggles and trailing actions size down on narrow phones and shrink their label instead of wrapping or overflowing, with large system text capped inside buttons; verified at 320 px wide with 130% text.
+- **Clearer Settings and About** — the Settings footer reads the app version from `pubspec.yaml` instead of a hardcoded value, the toggles are now "Require password" and "Burn Mode", and About lists current features grouped as Nearby, Global, Grab and Everywhere. Privacy and Terms cover how Grab works and who is responsible for downloaded content.
+
+### Previously in 1.0.9+9
 
 - **Burn Mode rooms now auto-expire** — rooms started with Burn Mode enabled shut down automatically at their two-hour deadline (previously the deadline was recorded but never enforced), and the host dashboard shows a live **"Expires in"** countdown. Enforcement also catches rooms whose deadline passed while the app was backgrounded, tearing them down on resume.
 - **Redeem invite codes** — Settings now has an **Invite code** field to redeem a friend's referral code while signed in, so both of you are credited for the invite once you qualify.
@@ -70,7 +92,7 @@ or cloud upload.
 Current release version:
 
 ```text
-1.0.9+9
+1.0.10+10
 ```
 
 Android release versioning:
@@ -257,7 +279,9 @@ curl http://<room-ip>:8787/api/room
 Erebrus Drop is local-first. Nearby Drop Rooms transfer directly over your
 Wi-Fi or hotspot without sending their contents to Erebrus services. Global
 Send is a separate, explicit path that uploads the file you choose to the
-selected Erebrus node.
+selected Erebrus node. Grab downloads public media straight from the site
+that hosts it; links and grabbed files never pass through NetSepio or Erebrus
+services, and processing happens on the device.
 
 Erebrus Drop does not collect analytics, advertising identifiers, contact
 lists, or location history. Global features necessarily process the active

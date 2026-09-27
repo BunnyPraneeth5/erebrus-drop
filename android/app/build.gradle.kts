@@ -131,6 +131,14 @@ android {
                 ?.second
 
             if (variant.buildType == "release") {
+                // Releases ship arm64 only (Flutter is built with
+                // --target-platform android-arm64). Plugins such as FFmpegKit
+                // bundle extra ABIs; left in, they bloat the APK and make Play
+                // offer the app to 32-bit/x86 devices that have no
+                // libflutter.so for their ABI.
+                variant.packaging.jniLibs.excludes.addAll(
+                    listOf("lib/armeabi-v7a/**", "lib/x86_64/**", "lib/x86/**"),
+                )
                 when (flavorName) {
                     "playstore" -> {
                         variant.signingConfig.setConfig(signingConfigs.getByName("playstoreRelease"))

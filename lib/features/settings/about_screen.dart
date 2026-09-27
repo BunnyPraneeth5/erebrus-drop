@@ -74,8 +74,10 @@ class AboutScreen extends StatelessWidget {
                 'NetSepio builds privacy infrastructure for a decentralized web. '
                 'Erebrus Drop is direct when nearby and decentralized when distance '
                 'matters. Local Drop Rooms move content across your current network '
-                'without sending it to Erebrus services. Global Send is a separate, '
-                'explicit action that uploads a chosen file to the Erebrus node you select.',
+                'without passing through Erebrus services. Global Send is a separate, '
+                'explicit action that uploads a file you choose to the Erebrus node '
+                'you select. Grab runs entirely on your device, fetching public media '
+                'straight from the source site with nothing routed through NetSepio.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
@@ -86,20 +88,49 @@ class AboutScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
+                  _Section('Nearby'),
                   _Bullet(
-                    'Host a local Drop Room and share via QR code or link',
+                    'Host a Drop Room over Wi-Fi or hotspot and share it by QR '
+                    'code or Drop Link',
                   ),
                   _Bullet(
-                    'Transfer files, text, and media between nearby devices',
+                    'Guests join from the app or any browser, with no install '
+                    'needed',
                   ),
                   _Bullet(
-                    'Join rooms from any browser — no app install required',
+                    'Move files, folders, text, and streamable media between '
+                    'nearby devices',
                   ),
-                  _Bullet('Pin files to public and organization Erebrus nodes'),
                   _Bullet(
-                    'Authenticate with wallet, email, Google, Apple, or Seeker',
+                    'Protect rooms with a password, keep guests in one folder, '
+                    'or let Burn Mode close the room after two hours',
                   ),
-                  _Bullet('Run on Android, iOS, macOS, Windows, and Linux'),
+                  _Bullet('Connect WebDAV clients to a live room'),
+                  _Bullet(
+                    'Receive files, text, and links from other apps through the '
+                    'share sheet',
+                  ),
+                  _Section('Global'),
+                  _Bullet(
+                    'Send files through public or organization Erebrus nodes '
+                    'and share the link',
+                  ),
+                  _Bullet(
+                    'Sign in with a Solana wallet, email, Google, or Apple, and '
+                    'redeem a friend\'s invite code',
+                  ),
+                  _Section('Grab'),
+                  _Bullet(
+                    'Save videos, audio, and photos from public links on '
+                    'YouTube, X, TikTok, Reddit, Bluesky, Vimeo, SoundCloud, '
+                    'and direct media links',
+                  ),
+                  _Bullet(
+                    'Choose video, audio (MP3 or original), or muted video, up '
+                    'to 4K',
+                  ),
+                  _Section('Everywhere'),
+                  _Bullet('Runs on Android, iOS, macOS, Windows, and Linux'),
                 ],
               ),
             ),
@@ -149,6 +180,24 @@ class AboutScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _Section extends StatelessWidget {
+  const _Section(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 8),
+      child: Text(
+        text,
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(color: DropTheme.orange),
       ),
     );
   }

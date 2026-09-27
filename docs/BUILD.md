@@ -20,6 +20,7 @@ Environment variables:
 - `REOWN_PROJECT_ID` — required for wallet/social login.
 - `GATEWAY_URL` — Erebrus gateway base URL (default `https://gateway.erebrus.io`).
 - `IPFS_GATEWAY_URL` — public IPFS gateway for CID downloads (default `https://ipfs.erebrus.io`).
+- `REDDIT_CLIENT_ID` — optional Reddit "installed app" client ID used by Grab for Reddit posts.
 
 `scripts/build.sh build-apk` and `build-appbundle` default to the `playstore`
 flavor when no `--flavor` is given.

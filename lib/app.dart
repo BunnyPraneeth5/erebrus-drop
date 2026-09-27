@@ -6,6 +6,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -25,6 +26,9 @@ import 'features/host/room_runtime_service.dart';
 import 'features/join/join_room_service.dart';
 import 'features/join/native_file_picker_service.dart';
 import 'features/join/qr_scan_screen.dart';
+import 'features/media_grab/grab_models.dart';
+import 'features/media_grab/media_grab_panel.dart';
+import 'features/media_grab/media_grab_service.dart';
 import 'features/nearby/nearby_room_service.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/onboarding/onboarding_store.dart';
@@ -36,7 +40,9 @@ import 'ui/layout/desktop_layout.dart';
 import 'ui/theme/drop_theme.dart';
 import 'ui/widgets/drop_widgets.dart';
 
-const String _appVersion = '1.0.8+8';
+/// App version from the native build, which Flutter stamps from the
+/// `version:` line in pubspec.yaml — no hardcoded copy to keep in sync.
+final Future<PackageInfo> _packageInfo = PackageInfo.fromPlatform();
 
 class ErebrusDropApp extends StatefulWidget {
   const ErebrusDropApp({this.skipOnboarding = false, super.key});
@@ -171,7 +177,14 @@ class _DropHomeScreenState extends State<DropHomeScreen>
   bool _stoppingRoom = false;
 
   final String _defaultUploadPath = '/';
+
+  /// Tab indices. Settings is a full screen reached from the Home header on
+  /// phones (the bottom bar keeps five slots) and a rail entry on desktop.
+  static const int _grabTabIndex = 4;
+  static const int _settingsTabIndex = 5;
   int _tab = 0;
+  final MediaGrabService _mediaGrab = MediaGrabService();
+  final ValueNotifier<String?> _grabIncomingLink = ValueNotifier(null);
   bool _starting = false;
   bool _hostFolderBusy = false;
   bool _loadingHostFolderSelection = true;
@@ -496,6 +509,8 @@ class _DropHomeScreenState extends State<DropHomeScreen>
     _joinTextTitle.dispose();
     _joinTextBody.dispose();
     _referralCode.dispose();
+    _mediaGrab.dispose();
+    _grabIncomingLink.dispose();
     _networkUiVersion.dispose();
     _joinUiVersion.dispose();
     unawaited(_shareSubscription?.cancel());
@@ -555,9 +570,12 @@ class _DropHomeScreenState extends State<DropHomeScreen>
     final shell = PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
-          unawaited(_handleBackNavigation());
+        if (didPop) return;
+        if (_tab == _settingsTabIndex && !useSideRail) {
+          _selectTab(0);
+          return;
         }
+        unawaited(_handleBackNavigation());
       },
       child: Scaffold(
         body: SafeArea(
@@ -575,6 +593,7 @@ class _DropHomeScreenState extends State<DropHomeScreen>
                     _roomsTab(),
                     _libraryTab(),
                     _smartSendTab(),
+                    _grabTab(),
                     _settingsTab(),
                   ],
                 ),
@@ -582,7 +601,7 @@ class _DropHomeScreenState extends State<DropHomeScreen>
             ],
           ),
         ),
-        bottomNavigationBar: useSideRail
+        bottomNavigationBar: useSideRail || _tab == _settingsTabIndex
             ? null
             : ClipRect(
                 child: BackdropFilter(
@@ -619,9 +638,9 @@ class _DropHomeScreenState extends State<DropHomeScreen>
                           label: 'Send',
                         ),
                         NavigationDestination(
-                          icon: Icon(Icons.settings_outlined),
-                          selectedIcon: Icon(Icons.settings),
-                          label: 'Settings',
+                          icon: Icon(Icons.download_for_offline_outlined),
+                          selectedIcon: Icon(Icons.download_for_offline),
+                          label: 'Grab',
                         ),
                       ],
                     ),
@@ -648,7 +667,9 @@ class _DropHomeScreenState extends State<DropHomeScreen>
     bind(LogicalKeyboardKey.digit2, () => _selectTab(1));
     bind(LogicalKeyboardKey.digit3, () => _selectTab(2));
     bind(LogicalKeyboardKey.digit4, () => _selectTab(3));
-    bind(LogicalKeyboardKey.digit5, () => _selectTab(4));
+    bind(LogicalKeyboardKey.digit5, () => _selectTab(_grabTabIndex));
+    bind(LogicalKeyboardKey.digit6, () => _selectTab(_settingsTabIndex));
+    bind(LogicalKeyboardKey.comma, () => _selectTab(_settingsTabIndex));
     bind(LogicalKeyboardKey.keyN, _showStartRoomSheet);
     bind(LogicalKeyboardKey.keyR, _refreshCurrentTab);
     return bindings;
@@ -669,7 +690,7 @@ class _DropHomeScreenState extends State<DropHomeScreen>
         }
       case 3:
         if (_smartSendScopeIndex == 1) unawaited(_refreshGatewayNodes());
-      case 4:
+      case _settingsTabIndex:
         unawaited(_refreshNetworkStatus());
     }
   }
@@ -705,6 +726,11 @@ class _DropHomeScreenState extends State<DropHomeScreen>
           icon: Icon(Icons.bolt_outlined),
           selectedIcon: Icon(Icons.bolt),
           label: Text('Send'),
+        ),
+        NavigationRailDestination(
+          icon: Icon(Icons.download_for_offline_outlined),
+          selectedIcon: Icon(Icons.download_for_offline),
+          label: Text('Grab'),
         ),
         NavigationRailDestination(
           icon: Icon(Icons.settings_outlined),
@@ -1194,24 +1220,11 @@ class _DropHomeScreenState extends State<DropHomeScreen>
     required int selected,
     required ValueChanged<int> onSelected,
   }) {
-    return ToggleButtons(
-      isSelected: labels.map((_) => false).toList()..[selected] = true,
-      onPressed: (index) => onSelected(index),
-      borderRadius: BorderRadius.circular(DropTheme.radiusTile),
-      borderColor: DropTheme.line,
-      selectedBorderColor: DropTheme.orange,
-      fillColor: DropTheme.orange.withValues(alpha: 0.18),
-      selectedColor: DropTheme.orange,
-      color: DropTheme.muted,
-      constraints: const BoxConstraints(minHeight: 40, minWidth: 80),
-      children: labels
-          .map(
-            (label) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(label),
-            ),
-          )
-          .toList(),
+    return DropSegmented(
+      labels: labels,
+      selected: selected,
+      onSelected: onSelected,
+      expand: isCompactWidth(context),
     );
   }
 
@@ -1439,6 +1452,78 @@ class _DropHomeScreenState extends State<DropHomeScreen>
         ),
       ),
     );
+  }
+
+  Widget _grabTab() {
+    final selection = _hostFolderSelection;
+    return _Screen(
+      glowAlignment: Alignment.topLeft,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _Head(
+            title: 'Grab',
+            subtitle: 'Save videos, audio and photos from public links',
+          ),
+          const SizedBox(height: 16),
+          MediaGrabPanel(
+            service: _mediaGrab,
+            incomingLink: _grabIncomingLink,
+            onSave: _saveGrabResult,
+            ensureDestination: _ensureGrabDestination,
+            destinationLabel: _server.isRunning
+                ? 'the live Drop Room'
+                : selection == null
+                ? 'your Drop folder'
+                : selection.name,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _ensureGrabDestination() async {
+    if (_server.isRunning) return true;
+    if (_loadingHostFolderSelection) await _loadHostFolderSelection();
+    if (_hostFolderSelection == null && mounted) {
+      await _promptSelectDropFolder();
+    }
+    return _server.isRunning || _hostFolderSelection != null;
+  }
+
+  /// Moves a finished grab into the live room, or the Drop folder when no
+  /// room is running. Returns where it went, or null if there is nowhere to
+  /// save it.
+  Future<String?> _saveGrabResult(GrabResult result) async {
+    if (_server.isRunning) {
+      await _server.importLocalFile(
+        file: result.file,
+        name: result.filename,
+        mimeType: result.mimeType,
+      );
+      unawaited(_refreshRoomData());
+      return 'Drop Room';
+    }
+    final selection = _hostFolderSelection;
+    if (selection == null) return null;
+    try {
+      final saved = await _hostFolderBridge.copyFileInto(
+        rootUri: selection.uri,
+        folderPath: '/',
+        sourcePath: result.file.path,
+        name: result.filename,
+        mimeType: result.mimeType,
+      );
+      unawaited(_loadLibraryFiles());
+      return '${selection.name}/${saved.name}';
+    } on PlatformException catch (e) {
+      await _hostFolderService.clearSelection();
+      if (mounted) setState(() => _hostFolderSelection = null);
+      throw GrabException(
+        'Could not write to the Drop folder. Choose it again.',
+        detail: e.message,
+      );
+    }
   }
 
   Widget _desktopFileDropTarget({required bool global, required Widget child}) {
@@ -1875,7 +1960,7 @@ class _DropHomeScreenState extends State<DropHomeScreen>
             backgroundColor: DropTheme.black,
             title: const Text('Choose Drop folder'),
             content: const Text(
-              'Gateway downloads are saved to your selected Drop folder. '
+              'Downloads are saved to your selected Drop folder. '
               'Please choose a folder and grant permission to write there.',
             ),
             actions: [
@@ -1982,11 +2067,26 @@ class _DropHomeScreenState extends State<DropHomeScreen>
   }
 
   Widget _settingsTab() {
+    final showBack = !DesktopLayout.useSideRail(
+      MediaQuery.sizeOf(context).width,
+    );
     return _Screen(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _Head(title: 'Settings'),
+          Row(
+            children: [
+              if (showBack) ...[
+                DropIconButton(
+                  icon: Icons.arrow_back_rounded,
+                  tooltip: 'Back',
+                  onPressed: () => _selectTab(0),
+                ),
+                const SizedBox(width: 12),
+              ],
+              const Expanded(child: _Head(title: 'Settings')),
+            ],
+          ),
           const SizedBox(height: 16),
           _gatewayAccountCard(),
           if (_dropAuthService.isSignedIn) ...[
@@ -2000,7 +2100,7 @@ class _DropHomeScreenState extends State<DropHomeScreen>
               children: [
                 _toggleRow(
                   icon: Icons.lock_rounded,
-                  title: 'Require password by default',
+                  title: 'Require password',
                   description: 'New rooms start with a password.',
                   value: _usePassword,
                   onChanged: (value) => setState(() => _usePassword = value),
@@ -2008,7 +2108,7 @@ class _DropHomeScreenState extends State<DropHomeScreen>
                 ),
                 _toggleRow(
                   icon: Icons.local_fire_department_rounded,
-                  title: 'Burn Mode default',
+                  title: 'Burn Mode',
                   description: 'Auto-expire new rooms after 2 hours.',
                   value: _burnMode,
                   onChanged: (value) => setState(() => _burnMode = value),
@@ -2427,13 +2527,17 @@ class _DropHomeScreenState extends State<DropHomeScreen>
   }
 
   Widget _settingsFooter() {
-    final shortVersion = _appVersion.split('+').first;
     return Center(
-      child: MonoText(
-        'v$shortVersion · NetSepio',
-        size: 12,
-        color: DropTheme.faint,
-        weight: FontWeight.w500,
+      child: FutureBuilder<PackageInfo>(
+        future: _packageInfo,
+        builder: (context, snapshot) => MonoText(
+          snapshot.hasData
+              ? 'v${snapshot.data!.version} · NetSepio'
+              : 'NetSepio',
+          size: 12,
+          color: DropTheme.faint,
+          weight: FontWeight.w500,
+        ),
       ),
     );
   }
@@ -4592,6 +4696,15 @@ class _DropHomeScreenState extends State<DropHomeScreen>
 
   Future<void> _handleSharedPayload(SharedPayload payload) async {
     if (payload.isEmpty || !mounted) return;
+    final sharedText = payload.text?.trim();
+    if (payload.filePaths.isEmpty &&
+        sharedText != null &&
+        _mediaGrab.isKnownMediaLink(sharedText)) {
+      // A YouTube/TikTok/X… link shared into the app: grab it.
+      _grabIncomingLink.value = sharedText;
+      _selectTab(_grabTabIndex);
+      return;
+    }
     if (_loadingHostFolderSelection) {
       await _loadHostFolderSelection();
     }
@@ -4863,11 +4976,19 @@ class _DropHomeScreenState extends State<DropHomeScreen>
           ),
         ),
         if (supportsNativeQrScanner) ...[
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           DropIconButton(
             icon: Icons.qr_code_scanner_rounded,
             onPressed: _scanDropCode,
             tooltip: 'Scan Drop Code',
+          ),
+        ],
+        if (!DesktopLayout.useSideRail(MediaQuery.sizeOf(context).width)) ...[
+          const SizedBox(width: 8),
+          DropIconButton(
+            icon: Icons.settings_outlined,
+            onPressed: () => _selectTab(_settingsTabIndex),
+            tooltip: 'Settings',
           ),
         ],
       ],

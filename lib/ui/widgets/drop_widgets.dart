@@ -306,6 +306,48 @@ Widget _spinner(Color color) => SizedBox.square(
   child: CircularProgressIndicator(strokeWidth: 2, color: color),
 );
 
+/// Phone-width layouts (small Android phones, iPhone SE/mini) get tighter
+/// buttons so a trailing action never crowds the text beside it.
+bool isCompactWidth(BuildContext context) =>
+    MediaQuery.sizeOf(context).width < 390;
+
+/// Button labels sit in fixed-height pills, so large accessibility text is
+/// capped here instead of overflowing; body text still scales fully.
+TextScaler _buttonTextScaler(BuildContext context) =>
+    MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.2);
+
+/// Icon + single-line label that shrink together to fit the space they are
+/// given, instead of wrapping, ellipsizing or overflowing on narrow phones.
+Widget _buttonContent(
+  BuildContext context, {
+  required String label,
+  required TextStyle style,
+  Widget? leading,
+  double gap = 8,
+  bool expand = true,
+}) {
+  return Center(
+    // Shrink-wrap unless the button is meant to fill its slot.
+    widthFactor: expand ? null : 1,
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (leading != null) ...[leading, SizedBox(width: gap)],
+          Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            textScaler: _buttonTextScaler(context),
+            style: style,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 /// Primary CTA: accent gradient, near-black foreground, weight 800, h48, r14,
 /// subtle accent shadow (spec §5).
 class PrimaryButton extends StatelessWidget {
@@ -328,36 +370,31 @@ class PrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !busy;
     final fg = enabled ? DropTheme.onAccent : DropTheme.faint;
-    final content = Row(
-      mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        if (busy)
-          _spinner(fg)
-        else if (icon != null)
-          Icon(icon, size: 19, color: fg),
-        if (busy || icon != null) const SizedBox(width: 9),
-        Flexible(
-          child: Text(
-            label,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: DropTheme.bodyFont,
-              fontWeight: FontWeight.w800,
-              fontSize: 14,
-              letterSpacing: 0.1,
-              color: fg,
-            ),
-          ),
-        ),
-      ],
+    final compact = isCompactWidth(context);
+    final content = _buttonContent(
+      expand: expand,
+      context,
+      leading: busy
+          ? _spinner(fg)
+          : (icon == null
+                ? null
+                : Icon(icon, size: compact ? 18 : 19, color: fg)),
+      gap: compact ? 7 : 9,
+      label: label,
+      style: TextStyle(
+        fontFamily: DropTheme.bodyFont,
+        fontWeight: FontWeight.w800,
+        fontSize: compact ? 13.5 : 14,
+        letterSpacing: 0.1,
+        color: fg,
+      ),
     );
     return PressableScale(
       enabled: enabled,
       onTap: enabled ? onPressed : null,
       child: Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 18),
+        height: compact ? 46 : 48,
+        padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 18),
         decoration: BoxDecoration(
           gradient: enabled ? DropTheme.accentGradient : null,
           color: enabled ? null : DropTheme.surfaceHigh,
@@ -403,35 +440,30 @@ class TonalButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !busy;
     final fg = enabled ? color : DropTheme.faint;
-    final content = Row(
-      mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        if (busy)
-          _spinner(fg)
-        else if (icon != null)
-          Icon(icon, size: 18, color: fg),
-        if (busy || icon != null) const SizedBox(width: 8),
-        Flexible(
-          child: Text(
-            label,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: DropTheme.bodyFont,
-              fontWeight: FontWeight.w800,
-              fontSize: 13.5,
-              color: fg,
-            ),
-          ),
-        ),
-      ],
+    final compact = isCompactWidth(context);
+    final content = _buttonContent(
+      expand: expand,
+      context,
+      leading: busy
+          ? _spinner(fg)
+          : (icon == null
+                ? null
+                : Icon(icon, size: compact ? 16 : 18, color: fg)),
+      gap: compact ? 6 : 8,
+      label: label,
+      style: TextStyle(
+        fontFamily: DropTheme.bodyFont,
+        fontWeight: FontWeight.w800,
+        fontSize: compact ? 13 : 13.5,
+        color: fg,
+      ),
     );
-    return PressableScale(
+    Widget button = PressableScale(
       enabled: enabled,
       onTap: enabled ? onPressed : null,
       child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        height: compact ? 40 : 44,
+        padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16),
         decoration: BoxDecoration(
           color: enabled
               ? color.withValues(alpha: 0.16)
@@ -444,6 +476,17 @@ class TonalButton extends StatelessWidget {
         child: content,
       ),
     );
+    if (!expand) {
+      // Trailing actions in list rows: never take more than a third of a
+      // phone screen, so the title/description beside them keeps its room.
+      button = ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: compact ? MediaQuery.sizeOf(context).width * 0.36 : 220,
+        ),
+        child: button,
+      );
+    }
+    return button;
   }
 }
 
@@ -457,7 +500,7 @@ class DropIconButton extends StatelessWidget {
     this.color = DropTheme.orange,
     this.busy = false,
     this.tooltip,
-    this.size = 44,
+    this.size,
     super.key,
   });
 
@@ -467,10 +510,13 @@ class DropIconButton extends StatelessWidget {
   final Color color;
   final bool busy;
   final String? tooltip;
-  final double size;
+
+  /// Square side; defaults to 44 (40 on compact screens).
+  final double? size;
 
   @override
   Widget build(BuildContext context) {
+    final size = this.size ?? (isCompactWidth(context) ? 40.0 : 44.0);
     final enabled = onPressed != null && !busy;
     final iconColor = tonal
         ? (enabled ? color : DropTheme.faint)
@@ -498,6 +544,84 @@ class DropIconButton extends StatelessWidget {
       button = Tooltip(message: tooltip!, child: button);
     }
     return button;
+  }
+}
+
+/// Segmented selector (Local/Global, Video/Audio…). With [expand] the
+/// segments share the full width, which keeps labels on one line on phones.
+class DropSegmented extends StatelessWidget {
+  const DropSegmented({
+    required this.labels,
+    required this.selected,
+    required this.onSelected,
+    this.icons,
+    this.expand = false,
+    super.key,
+  });
+
+  final List<String> labels;
+  final List<IconData>? icons;
+  final int selected;
+  final ValueChanged<int> onSelected;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = isCompactWidth(context);
+    Widget segment(int index) {
+      final active = index == selected;
+      final fg = active ? DropTheme.orange : DropTheme.muted;
+      final icon = icons?[index];
+      return Semantics(
+        button: true,
+        selected: active,
+        child: InkWell(
+          onTap: () => onSelected(index),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            height: compact ? 38 : 40,
+            padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active
+                  ? DropTheme.orange.withValues(alpha: 0.18)
+                  : Colors.transparent,
+              border: active ? Border.all(color: DropTheme.orange) : null,
+              borderRadius: BorderRadius.circular(DropTheme.radiusTile - 1),
+            ),
+            child: _buttonContent(
+              context,
+              leading: icon == null ? null : Icon(icon, size: 16, color: fg),
+              gap: 6,
+              label: labels[index],
+              style: TextStyle(
+                fontFamily: DropTheme.bodyFont,
+                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                fontSize: compact ? 13 : 14,
+                color: fg,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(DropTheme.radiusTile),
+        border: Border.all(color: DropTheme.line),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(DropTheme.radiusTile - 1),
+        child: Row(
+          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            for (var i = 0; i < labels.length; i++)
+              if (expand) Expanded(child: segment(i)) else segment(i),
+          ],
+        ),
+      ),
+    );
   }
 }
 

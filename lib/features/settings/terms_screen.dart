@@ -22,7 +22,7 @@ class TermsScreen extends StatelessWidget {
             const SizedBox(height: 18),
             const _TextCard(
               text:
-                  'Erebrus Drop provides direct nearby Drop Rooms and optional Global Send through Erebrus nodes. Use either path only for files and content you own or have permission to share.',
+                  'Erebrus Drop provides direct nearby Drop Rooms, optional Global Send through Erebrus nodes, and Grab for saving public media from links. Use these features only for files and content you own or have permission to share or download.',
             ),
             const SizedBox(height: 8),
             const _TextCard(
@@ -32,12 +32,17 @@ class TermsScreen extends StatelessWidget {
             const SizedBox(height: 8),
             const _TextCard(
               text:
+                  'Grab only works with media that is publicly available without signing in, and it does not bypass DRM or other access controls. You alone are responsible for making sure you have the right to download and use what you grab, including complying with copyright law and the terms of the site that hosts it. NetSepio does not host, store, or review grabbed content, and sites can change or block access at any time, so Grab may stop working for a site without notice.',
+            ),
+            const SizedBox(height: 8),
+            const _TextCard(
+              text:
                   'The app is provided as-is. Local transfers depend on your devices and network conditions. Global transfers additionally depend on the selected node, gateway availability, and the access or encryption status shown for the file.',
             ),
             const SizedBox(height: 8),
             const _TextCard(
               text:
-                  'To the fullest extent permitted by law, you agree to indemnify and hold NetSepio harmless from claims, losses, damages, liabilities, and expenses arising from your use of Erebrus Drop, the content you share, or your violation of these terms or applicable law.',
+                  'To the fullest extent permitted by law, you agree to indemnify and hold NetSepio harmless from claims, losses, damages, liabilities, and expenses arising from your use of Erebrus Drop, the content you share or download, or your violation of these terms or applicable law.',
             ),
             const SizedBox(height: 8),
             _TextCard(

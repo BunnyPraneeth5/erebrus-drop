@@ -602,8 +602,10 @@ void main() {
     for (final size in sizes) {
       await tester.binding.setSurfaceSize(size);
       tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = size;
       addTearDown(() {
         tester.view.resetDevicePixelRatio();
+        tester.view.resetPhysicalSize();
         return tester.binding.setSurfaceSize(null);
       });
 
@@ -615,13 +617,54 @@ void main() {
         Icons.hub_outlined,
         Icons.folder_outlined,
         Icons.bolt_outlined,
-        Icons.settings_outlined,
+        Icons.download_for_offline_outlined,
         Icons.home_outlined,
       ]) {
         await tester.tap(find.byIcon(icon).last);
         await tester.pump();
         expect(tester.takeException(), isNull);
       }
+
+      // Settings lives behind the Home header gear on phones.
+      await tester.tap(find.byIcon(Icons.settings_outlined).last);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Settings'), findsWidgets);
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Start Drop Room'), findsOneWidget);
+    }
+  });
+
+  testWidgets('small phones with large text keep every tab overflow-free', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 640);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(() {
+      tester.view.resetDevicePixelRatio();
+      tester.view.resetPhysicalSize();
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+      return tester.binding.setSurfaceSize(null);
+    });
+
+    await tester.pumpWidget(const ErebrusDropApp(skipOnboarding: true));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    for (final icon in const [
+      Icons.hub_outlined,
+      Icons.folder_outlined,
+      Icons.bolt_outlined,
+      Icons.download_for_offline_outlined,
+      Icons.home_outlined,
+      Icons.settings_outlined,
+    ]) {
+      await tester.tap(find.byIcon(icon).last);
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: 'overflow on $icon');
     }
   });
 

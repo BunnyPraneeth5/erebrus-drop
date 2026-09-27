@@ -1,13 +1,14 @@
 # Erebrus Drop Spec Coverage
 
-Current app version: `1.0.8+8`
+Current app version: `1.0.10+10`
 
 ## Implemented in this repo
 
 - Flutter Android/iOS app scaffold in the repository root.
 - Package/bundle identity: `com.erebrus.drop`.
 - Dark Material 3 theme in `lib/ui/theme/drop_theme.dart`.
-- Home, Rooms, Library, Smart Send, and Settings tabs.
+- Home, Rooms, Library, Smart Send, and Grab tabs; Settings opens from the Home gear (desktop: side rail).
+- Grab: on-device media downloader for public links (YouTube, X, TikTok, Reddit, Bluesky, Vimeo, SoundCloud, direct/HLS) with bundled FFmpeg for merging, MP3 encoding and muting.
 - Start Drop Room flow on current network.
 - Password-protected room auth with PBKDF2-HMAC-SHA256.
 - Local HTTP server on port `8787` with fallback ports through `8799`.
@@ -60,9 +61,11 @@ Current app version: `1.0.8+8`
 - `lib/features/media/media_streaming.dart`
 - `lib/server/discovery/discovery_contract.dart`
 - `lib/server/streaming/range_request.dart`
+- `lib/features/media_grab/` (Grab: extractors, HLS selection, FFmpeg pipeline, panel UI)
 
 ## Still needs plugin/native/device implementation
 
+- Grab: Instagram/Facebook (need login), playlists, and a live TikTok check outside regions where TikTok is blocked.
 - Remaining external host-folder storage adapter work:
   - Android SAF delete/rename implementation for hosted rooms.
   - iOS Files/iCloud delete/rename implementation for hosted rooms.

@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   desktop_drop
+  ffmpeg_kit_flutter_new_full
   file_selector_linux
   gtk
   screen_retriever_linux

@@ -27,7 +27,7 @@ class PrivacyScreen extends StatelessWidget {
             const SizedBox(height: 8),
             const _TextCard(
               text:
-                  'Erebrus Drop has two distinct paths. Local Drop Rooms transfer directly between devices on your Wi-Fi or hotspot. Global Send uploads only the file you explicitly choose to the selected Erebrus node.',
+                  'Erebrus Drop has three distinct paths. Local Drop Rooms transfer directly between devices on your Wi-Fi or hotspot. Global Send uploads only the file you explicitly choose to the selected Erebrus node. Grab downloads public media you ask for straight from the site that hosts it.',
             ),
             const SizedBox(height: 8),
             const _TextCard(
@@ -37,7 +37,12 @@ class PrivacyScreen extends StatelessWidget {
             const SizedBox(height: 8),
             const _TextCard(
               text:
-                  'Permissions are feature-scoped: camera for QR scans, local network access for Drop Rooms, and file or folder access for uploads and downloads. You control when those features are used.',
+                  'When you use Grab, your device connects directly to the site behind the link, such as YouTube or TikTok. That site sees your IP address and ordinary request details, just as it would if you opened the link in a browser, and its own privacy policy applies. Links you grab and the files you save are never sent to NetSepio or Erebrus services, all processing happens on your device, and Grab never asks for your account on those sites.',
+            ),
+            const SizedBox(height: 8),
+            const _TextCard(
+              text:
+                  'Permissions are feature-scoped: camera for QR scans, local network access for Drop Rooms, clipboard access only when you tap paste, and file or folder access for uploads, downloads, and grabbed media. You control when those features are used.',
             ),
             const SizedBox(height: 8),
             _TextCard(text: 'For privacy questions, contact $_supportEmail.'),

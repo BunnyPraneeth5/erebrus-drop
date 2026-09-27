@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   bonsoir_windows
   connectivity_plus
   desktop_drop
+  ffmpeg_kit_flutter_new_full
   file_selector_windows
   screen_retriever_windows
   tray_manager
