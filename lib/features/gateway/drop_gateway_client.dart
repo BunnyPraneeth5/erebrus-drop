@@ -5,12 +5,37 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 import 'package:pointycastle/export.dart';
 
 import 'gateway_config.dart';
 import 'gateway_http.dart';
 import 'gateway_models.dart';
+
+/// SHA-256 of a file computed by streaming (constant memory).
+Future<String> sha256OfFile(File file) async =>
+    (await sha256.bind(file.openRead()).first).toString();
+
+/// Clear copy for gateway Drop upload errors. The gateway enforces quota and
+/// per-file limits; this only explains its answer.
+String friendlyDropUploadError(Object error) {
+  if (error is GatewayException) {
+    switch (error.errorCode) {
+      case 'DROP_QUOTA_EXCEEDED':
+        return 'Your Drop storage is full. Delete files or upgrade at erebrus.io/pricing for more space.';
+      case 'DROP_FILE_TOO_LARGE':
+        return 'This file is larger than your plan\'s per-file limit.';
+      case 'DROP_NODE_CAPACITY':
+        return 'This node is full. Pick another node.';
+      case 'DROP_NODE_UNAVAILABLE':
+        return 'This node isn\'t accepting uploads right now. Pick another node or try again.';
+    }
+    if (error.statusCode == 413) return 'This file is larger than your plan\'s per-file limit.';
+    return 'Upload failed: ${error.message}';
+  }
+  return 'Upload failed: $error';
+}
 
 /// Client for the Erebrus gateway Drop endpoints.
 class DropGatewayClient {
@@ -129,12 +154,12 @@ class DropGatewayClient {
     String? orgId,
     String? contentType,
   }) async {
-    final bytes = await file.readAsBytes();
-    final digest = sha256.convert(bytes);
-    final sha = digest.toString();
+    // Hash while streaming so large files (up to the 1 GB plan limit) are
+    // never held in memory.
+    final sha = await sha256OfFile(file);
     final reservation = await reserveUpload(
       nodeId: nodeId,
-      sizeBytes: bytes.length,
+      sizeBytes: await file.length(),
       filename: filename,
       contentType: contentType ?? 'application/octet-stream',
       visibility: visibility,
@@ -173,8 +198,15 @@ class DropGatewayClient {
         .toList();
   }
 
-  String _randomIdempotencyKey() {
-    final bytes = List<int>.generate(16, (_) => 0);
+  // Each logical upload needs a unique key: the gateway returns the existing
+  // reservation for a repeated key, so a constant key made every later upload
+  // silently resolve to the first file.
+  String _randomIdempotencyKey() => randomIdempotencyKey();
+
+  @visibleForTesting
+  static String randomIdempotencyKey() {
+    final rng = Random.secure();
+    final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
     return base64Encode(bytes).replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
   }
 
@@ -254,6 +286,12 @@ class DropGatewayClient {
   }
 
   /// Builds the ordered list of URLs to try for a file download.
+  @visibleForTesting
+  List<Uri> resolveDownloadCandidates(DropGatewayFile file) => _resolveDownloadCandidates(file);
+
+  @visibleForTesting
+  bool needsAuthForDownload(Uri url) => _needsAuthForDownload(url);
+
   List<Uri> _resolveDownloadCandidates(DropGatewayFile file) {
     final candidates = <Uri>[];
     void addRaw(String? raw) {
@@ -275,18 +313,22 @@ class DropGatewayClient {
       );
     }
     if (file.fileId.isNotEmpty) {
+      // Owner/org download streams through the gateway (works for private and
+      // encrypted files); public files also have the unauthenticated route.
       candidates.add(
         GatewayHttp.apiUri(
           _base,
-          path: '/api/v2/drop/files/${file.fileId}/download',
+          path: '/api/v2/drop/files/${file.fileId}/content',
         ),
       );
-      candidates.add(
-        GatewayHttp.apiUri(
-          _base,
-          path: '/api/v2/drop/uploads/${file.fileId}/download',
-        ),
-      );
+      if (file.visibility == 'public' && file.scope == 'public') {
+        candidates.add(
+          GatewayHttp.apiUri(
+            _base,
+            path: '/api/v2/drop/public/${file.fileId}/content',
+          ),
+        );
+      }
     }
 
     // Deduplicate while preserving order.
@@ -296,9 +338,7 @@ class DropGatewayClient {
 
   /// Whether a download URL needs the bearer token.
   bool _needsAuthForDownload(Uri url) {
-    return url.host == _base.host &&
-        (url.path.startsWith('/api/v2/drop/files/') ||
-            url.path.startsWith('/api/v2/drop/uploads/'));
+    return url.host == _base.host && url.path.startsWith('/api/v2/drop/files/');
   }
 
   /// Downloads [url] to [tempFile] and throws [GatewayException] on HTTP errors.

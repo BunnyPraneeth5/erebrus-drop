@@ -16,6 +16,7 @@ import 'core/host_folder_bridge.dart';
 import 'core/platform_capabilities.dart';
 import 'core/platform_network.dart';
 import 'features/gateway/drop_auth_service.dart';
+import 'features/gateway/drop_gateway_client.dart' show friendlyDropUploadError;
 import 'features/gateway/gateway_config.dart';
 import 'features/gateway/gateway_http.dart';
 import 'features/gateway/gateway_models.dart';
@@ -1896,11 +1897,13 @@ class _DropHomeScreenState extends State<DropHomeScreen>
       );
       if (!mounted) return;
       setState(() => _gatewayUploadedCid = uploaded.cid);
-      _snack('$filename pinned to ${node.name}');
+      _snack(isOrgNode
+          ? '$filename saved to ${node.name} (workspace only — not shareable)'
+          : '$filename pinned to ${node.name}');
       unawaited(_refreshGatewayFiles());
     } catch (e) {
       if (!mounted) return;
-      _snack('Upload failed: $e');
+      _snack(friendlyDropUploadError(e));
     } finally {
       if (mounted) setState(() => _gatewayUploading = false);
     }
